@@ -22,6 +22,14 @@ class Markdown {
           public:
             Type type = Type::PLAIN;
             std::string content;
+            Text(std::string src, Type tp = Type::PLAIN) {
+                content = src;
+                type = tp;
+            }
+            Text(char src, Type tp = Type::PLAIN) {
+                content.push_back(src);
+                type = tp;
+            }
         };
         std::vector<Text> texts;
     };
@@ -42,7 +50,7 @@ class Markdown {
     std::vector<Section> content{};
 
     Markdown Deserialize(std::string);
-    Markdown(){};
+    Markdown() {};
     Markdown(std::string);
 };
 
