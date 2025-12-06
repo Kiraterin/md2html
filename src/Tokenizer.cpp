@@ -7,20 +7,27 @@ Token::Token(TokenType token_t, std::string content) {
     this->content = content;
 }
 
-static bool isblank(char c, bool include_newline = true) {
-    if (include_newline) {
-        return c == ' ' || c == '\t' || c == '\n';
-    } else {
-        return c == ' ' || c == '\t';
+static bool isblank(char c, bool include_newline = true,
+                    bool include_tab = true) {
+    bool is_space = c == ' ';
+    bool is_tab = c == '\t' && include_tab;
+    bool is_newline = c == '\n' && include_newline;
+    return is_space || is_tab || is_newline;
+}
+
+void text_flush(std::string &buf, std::vector<Token> &ret) {
+    if (!buf.empty()) {
+        ret.push_back({TokenType::TextPart, buf});
+        buf.clear();
     }
 }
 
 std::vector<Token> Token::Tokenize(const std::string &src) {
     std::vector<Token> ret;
     auto iter = src.begin();
+    auto forward = src.begin();
 
     std::string buf;
-    bool should_flush = false;
 
     bool is_newline = true;
     bool is_multi_newline = false;
@@ -44,54 +51,94 @@ std::vector<Token> Token::Tokenize(const std::string &src) {
                 }
                 is_newline = false;
             }
-        }
 
+            if (cur == '#') {
+                size_t cnt = 0;
+                forward = iter;
+                while (forward != src.end() && *forward == '#') {
+                    ++forward;
+                    ++cnt;
+                }
+                if (forward != src.end() && *forward == ' ' && cnt <= 6) {
+                    ret.push_back({TokenType::Title, std::to_string(cnt)});
+                    iter = forward + 1;
+                    continue;
+                }
+            } else if (cur == '*') {
+                forward = iter;
+                size_t cnt = 0;
+                while (forward != src.end() && (*forward == '*' || isblank(*forward, false))) {
+                    ++forward;
+                    ++cnt;
+                }
+                if (forward != src.end() && *forward == '\n' && cnt >= 3) {
+                    ret.push_back({TokenType::HorizonTalRule});
+                    iter = forward;
+                    continue;
+                }
+            } else {
+                forward = iter + 1;
+                if (forward != src.end()) {
+                    if (cur == '-' && *forward == ' ') {
+                        ret.push_back({TokenType::UnorderedList});
+                        while (forward != src.end() &&
+                               isblank(*forward, false)) {
+                            ++forward;
+                        }
+                        iter = forward;
+                        continue;
+                    } else if (std::isdigit(cur)) {
+                        std::string number;
+                        number.push_back(cur);
+                        while (forward != src.end() && std::isdigit(*forward)) {
+                            number.push_back(*forward);
+                            ++forward;
+                        }
+                        if (forward != src.end() && *forward == '.') {
+                            forward += 1;
+                            if (forward != src.end() && *forward == ' ') {
+                                ret.push_back({TokenType::OrderedList, number});
+                                while (forward != src.end() &&
+                                       isblank(*forward, false)) {
+                                    ++forward;
+                                }
+                                iter = forward;
+                                continue;
+                            }
+                        }
+                    }
+                }
+            }
+        }
         switch (cur) {
-        case '#': {
-            if (is_newline) {
-                ret.push_back(Token(TokenType::HashTag));
+        case '*': {
+            text_flush(buf, ret);
+            ret.push_back({TokenType::Star});
+            break;
+        }
+        case '~': {
+            forward = iter + 1;
+            if (forward != src.end() && *forward == '~') {
+                text_flush(buf, ret);
+                ret.push_back({TokenType::Delete});
+                iter = forward;
             } else {
                 buf.push_back(cur);
             }
             break;
         }
-        case '*': {
-            auto forward = iter;
-            while (isblank(*forward, false) || *forward == '*') {
-                if (*forward == '*') {
-                    ++star_cnt;
-                }
-                ++forward;
-            }
-            if (*forward == '\n' && star_cnt >= 3) {
-                ret.push_back(Token(TokenType::HorizonTalRule));
-            } else {
-                while (star_cnt > 0) {
-                    ret.push_back(Token(TokenType::Star));
-                    --star_cnt;
-                }
-            }
-            iter = forward - 1;
-            star_cnt = 0;
-            break;
-        }
         case '\n':
             is_newline = true;
-            should_flush = true;
+            text_flush(buf, ret);
             break;
         default:
             buf.push_back(cur);
             break;
         }
-
-        if (should_flush) {
-            if (!buf.empty()) {
-                ret.push_back(Token(TokenType::TextPart, buf));
-                buf.clear();
-            }
-            should_flush = false;
-        }
         ++iter;
     }
+
+    text_flush(buf, ret);
+
     return ret;
 }
