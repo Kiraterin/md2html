@@ -3,7 +3,7 @@
 
 #include "public.hpp"
 
-enum class TokenType { TextPart, Title, Delete, Star, HorizonTalRule, BlankLine, UnorderedList, OrderedList };
+enum class TokenType { TextPart, Title, Delete, Star, HorizontalRule, BlankLine, UnorderedList, OrderedList };
 
 class Token {
   public:

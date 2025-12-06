@@ -72,7 +72,7 @@ std::vector<Token> Token::Tokenize(const std::string &src) {
                     ++cnt;
                 }
                 if (forward != src.end() && *forward == '\n' && cnt >= 3) {
-                    ret.push_back({TokenType::HorizonTalRule});
+                    ret.push_back({TokenType::HorizontalRule});
                     iter = forward;
                     continue;
                 }
