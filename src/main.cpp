@@ -5,7 +5,7 @@
 #include <sstream>
 
 int main() {
-    std::ifstream ifs("test.md");
+    std::ifstream ifs("test1.md");
     std::stringstream buffer;
     buffer << ifs.rdbuf();
     std::string str(buffer.str());

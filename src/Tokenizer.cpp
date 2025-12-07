@@ -7,7 +7,7 @@ Token::Token(TokenType token_t, std::string content) {
     this->content = content;
 }
 
-static bool isblank(char c, bool include_newline = true,
+static bool isblank(char c, bool include_newline = false,
                     bool include_tab = true) {
     bool is_space = c == ' ';
     bool is_tab = c == '\t' && include_tab;
@@ -22,7 +22,9 @@ void text_flush(std::string &buf, std::vector<Token> &ret) {
     }
 }
 
-std::vector<Token> Token::Tokenize(const std::string &src) {
+std::vector<Token> Token::Tokenize(std::string src) {
+    src.push_back('\n');
+
     std::vector<Token> ret;
     auto iter = src.begin();
     auto forward = src.begin();
@@ -35,13 +37,11 @@ std::vector<Token> Token::Tokenize(const std::string &src) {
     size_t star_cnt = 0;
 
     while (iter != src.end()) {
-        auto &cur = *iter;
-
         if (is_newline) {
-            if (isblank(cur)) {
-                if (cur == '\n') {
-                    is_multi_newline = true;
-                }
+            if (*iter == '\n') {
+                is_multi_newline = true;
+            }
+            if (isblank(*iter, true)) {
                 ++iter;
                 continue;
             } else {
@@ -52,65 +52,139 @@ std::vector<Token> Token::Tokenize(const std::string &src) {
                 is_newline = false;
             }
 
-            if (cur == '#') {
+            forward = iter + 1;
+            switch (forward = iter + 1; *iter) {
+            case '#': {
                 size_t cnt = 0;
                 forward = iter;
-                while (forward != src.end() && *forward == '#') {
+                while (*forward == '#') {
                     ++forward;
                     ++cnt;
                 }
-                if (forward != src.end() && *forward == ' ' && cnt <= 6) {
+                if (*forward == ' ' && cnt <= 6) {
                     ret.push_back({TokenType::Title, std::to_string(cnt)});
                     iter = forward + 1;
                     continue;
                 }
-            } else if (cur == '*') {
-                forward = iter;
+                break;
+            }
+            case '*': {
+                auto gorward = forward;
                 size_t cnt = 0;
-                while (forward != src.end() && (*forward == '*' || isblank(*forward, false))) {
-                    ++forward;
+                while (*gorward == '*' || isblank(*gorward)) {
+                    ++gorward;
                     ++cnt;
                 }
-                if (forward != src.end() && *forward == '\n' && cnt >= 3) {
+                if (*forward == ' ' && *gorward != '\n') {
+                    ret.push_back({TokenType::UnorderedList});
+                    while (isblank(*forward)) {
+                        ++forward;
+                    }
+                    iter = forward;
+                    continue;
+                } else if (cnt >= 3) {
                     ret.push_back({TokenType::HorizontalRule});
+                    iter = gorward;
+                    continue;
+                }
+                break;
+            }
+            case '>': {
+                if (isblank(*forward)) {
+                    ret.push_back({TokenType::Quotation});
+                    while (isblank(*forward)) {
+                        ++forward;
+                    }
+                    is_newline = true;
                     iter = forward;
                     continue;
                 }
-            } else {
-                forward = iter + 1;
-                if (forward != src.end()) {
-                    if (cur == '-' && *forward == ' ') {
-                        ret.push_back({TokenType::UnorderedList});
-                        while (forward != src.end() &&
-                               isblank(*forward, false)) {
+                break;
+            }
+            case '-': {
+                if (isblank(*forward)) {
+                    ret.push_back({TokenType::UnorderedList});
+                    while (isblank(*forward)) {
+                        ++forward;
+                    }
+                    iter = forward;
+                    continue;
+                }
+                break;
+            }
+            case '`': {
+                size_t sign_amount = 1;
+                std::string lang;
+                std::string code;
+                while (*forward == '`') {
+                    ++forward;
+                    ++sign_amount;
+                }
+                if (sign_amount == 3) {
+                    while (isblank(*forward)) {
+                        ++forward;
+                    }
+                    if (*forward != '\n') {
+                        while (*forward != ' ' && *forward != '\n') {
+                            lang.push_back(*forward);
+                            ++forward;
+                        }
+                        ret.push_back({TokenType::CodeLang, lang});
+                        while (*forward != '\n') {
+                            ++forward;
+                        }
+                    } else {
+                        ret.push_back({TokenType::CodeLang});
+                    }
+                    forward += 1;
+                    while (forward != src.end()) {
+                        if (*forward == '`') {
+                            auto before = forward;
+                            sign_amount = 0;
+                            while (*forward == '`') {
+                                ++sign_amount;
+                                ++forward;
+                            }
+                            if (sign_amount == 3) {
+                                break;
+                            }
+                        }
+                        code.push_back(*forward);
+                        ++forward;
+                    }
+                    ret.push_back({TokenType::CodeBlock, code});
+                    iter = forward;
+                    continue;
+                }
+                break;
+            }
+            case '0' ... '9': {
+                std::string number;
+                number.push_back(*iter);
+                while (std::isdigit(*forward)) {
+                    number.push_back(*forward);
+                    ++forward;
+                }
+                if (*forward == '.') {
+                    forward += 1;
+                    if (*forward == ' ') {
+                        ret.push_back({TokenType::OrderedList, number});
+                        while (isblank(*forward)) {
                             ++forward;
                         }
                         iter = forward;
                         continue;
-                    } else if (std::isdigit(cur)) {
-                        std::string number;
-                        number.push_back(cur);
-                        while (forward != src.end() && std::isdigit(*forward)) {
-                            number.push_back(*forward);
-                            ++forward;
-                        }
-                        if (forward != src.end() && *forward == '.') {
-                            forward += 1;
-                            if (forward != src.end() && *forward == ' ') {
-                                ret.push_back({TokenType::OrderedList, number});
-                                while (forward != src.end() &&
-                                       isblank(*forward, false)) {
-                                    ++forward;
-                                }
-                                iter = forward;
-                                continue;
-                            }
-                        }
                     }
                 }
+                break;
+            }
+            default: {
+                break;
+            }
             }
         }
-        switch (cur) {
+
+        switch (*iter) {
         case '*': {
             text_flush(buf, ret);
             ret.push_back({TokenType::Star});
@@ -118,27 +192,40 @@ std::vector<Token> Token::Tokenize(const std::string &src) {
         }
         case '~': {
             forward = iter + 1;
-            if (forward != src.end() && *forward == '~') {
+            if (*forward == '~') {
                 text_flush(buf, ret);
                 ret.push_back({TokenType::Delete});
                 iter = forward;
             } else {
-                buf.push_back(cur);
+                buf.push_back(*iter);
             }
             break;
         }
-        case '\n':
+        case '`': {
+            std::string code;
+            iter += 1;
+            while (iter != src.end() && *iter != '`') {
+                code.push_back(*iter);
+                ++iter;
+            }
+            if (iter == src.end()) {
+                iter -= 1;
+            }
+            ret.push_back({TokenType::CodeBlock, code});
+            break;
+        }
+        case '\n': {
             is_newline = true;
             text_flush(buf, ret);
             break;
-        default:
-            buf.push_back(cur);
+        }
+        default: {
+            buf.push_back(*iter);
             break;
+        }
         }
         ++iter;
     }
-
-    text_flush(buf, ret);
 
     return ret;
 }
