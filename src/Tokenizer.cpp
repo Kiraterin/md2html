@@ -7,6 +7,36 @@ Token::Token(TokenType token_t, std::string content) {
     this->content = content;
 }
 
+std::string Token::ToString() {
+    std::string enum_str = [this] {
+        switch (token_type) {
+        case TokenType::TextPart: return "TextPart";
+        case TokenType::Title: return "Title";
+        case TokenType::Delete: return "Delete";
+        case TokenType::Star: return "Star";
+        case TokenType::HorizontalRule: return "HorizontalRule";
+        case TokenType::BlankLine: return "BlankLine";
+        case TokenType::UnorderedList: return "UnorderedList";
+        case TokenType::OrderedList: return "OrderedList";
+        case TokenType::QuotationBegin: return "QuotationBegin";
+        case TokenType::QuotationEnd: return "QuotationEnd";
+        case TokenType::CodeLang: return "CodeLang";
+        case TokenType::CodeBlock: return "CodeBlock";
+        default: return "UnknownToken";
+        }
+    }();
+    std::string content_tmp;
+    for (auto c : content) {
+        if (c == '\n') {
+            content_tmp += "\\n";
+        } else {
+            content_tmp += c;
+        }
+    }
+    return std::format("<{}{}>", enum_str,
+                       content_tmp.empty() ? "" : ", \"" + content_tmp + "\"");
+}
+
 static bool isblank(char c, bool include_newline = false,
                     bool include_tab = true) {
     bool is_space = c == ' ';
@@ -22,10 +52,9 @@ void text_flush(std::string &buf, std::vector<Token> &ret) {
     }
 }
 
-std::vector<Token> Token::Tokenize(std::string src) {
+void base_tokenize(std::string src, std::vector<Token> &ret) {
     src.push_back('\n');
 
-    std::vector<Token> ret;
     auto iter = src.begin();
     auto forward = src.begin();
 
@@ -33,8 +62,6 @@ std::vector<Token> Token::Tokenize(std::string src) {
 
     bool is_newline = true;
     bool is_multi_newline = false;
-
-    size_t star_cnt = 0;
 
     while (iter != src.end()) {
         if (is_newline) {
@@ -90,15 +117,24 @@ std::vector<Token> Token::Tokenize(std::string src) {
                 break;
             }
             case '>': {
-                if (isblank(*forward)) {
-                    ret.push_back({TokenType::Quotation});
+                ret.push_back({TokenType::QuotationBegin});
+                std::string section;
+                forward = iter;
+                while (forward != src.end() && *forward == '>') {
+                    forward += 1;
                     while (isblank(*forward)) {
                         ++forward;
                     }
-                    is_newline = true;
-                    iter = forward;
-                    continue;
+                    while (*forward != '\n') {
+                        section.push_back(*forward);
+                        ++forward;
+                    }
+                    section.push_back('\n');
+                    forward += 1;
                 }
+                base_tokenize(section, ret);
+                ret.push_back({TokenType::QuotationEnd});
+                continue;
                 break;
             }
             case '-': {
@@ -226,6 +262,10 @@ std::vector<Token> Token::Tokenize(std::string src) {
         }
         ++iter;
     }
+}
 
+std::vector<Token> Token::Tokenize(std::string src) {
+    std::vector<Token> ret;
+    base_tokenize(src, ret);
     return ret;
 }

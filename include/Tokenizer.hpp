@@ -12,7 +12,8 @@ enum class TokenType {
     BlankLine,
     UnorderedList,
     OrderedList,
-    Quotation,
+    QuotationBegin,
+    QuotationEnd,
     CodeLang,
     CodeBlock
 };
@@ -23,6 +24,7 @@ class Token {
     std::string content;
 
     static std::vector<Token> Tokenize(std::string);
+    std::string ToString();
 
     Token(TokenType);
     Token(TokenType, std::string);

@@ -1,15 +1,12 @@
 #include "Markdown.hpp"
-#include "public.hpp"
 #include "Tokenizer.hpp"
-#include <fstream>
-#include <sstream>
+#include "debug.hpp"
+#include "public.hpp"
 
 int main() {
     std::ifstream ifs("test1.md");
     std::stringstream buffer;
     buffer << ifs.rdbuf();
-    std::string str(buffer.str());
-    std::cout << str << std::endl;
-    Token::Tokenize(str);
+    out_tokens(Token::Tokenize(buffer.str()), "tokens.txt");
     return 0;
 }
