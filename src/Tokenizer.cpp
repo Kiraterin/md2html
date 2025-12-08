@@ -22,6 +22,12 @@ std::string Token::ToString() {
         case TokenType::QuotationEnd: return "QuotationEnd";
         case TokenType::CodeLang: return "CodeLang";
         case TokenType::CodeBlock: return "CodeBlock";
+        case TokenType::Highlight: return "Highlight";
+        case TokenType::CheckBoxList: return "CheckBoxList";
+        case TokenType::LinkTextBegin: return "LinkTextBegin";
+        case TokenType::LinkTextEnd: return "LinkTextEnd";
+        case TokenType::Link: return "Link";
+        case TokenType::Image: return "Image";
         default: return "UnknownToken";
         }
     }();
@@ -62,6 +68,7 @@ void base_tokenize(std::string src, std::vector<Token> &ret) {
 
     bool is_newline = true;
     bool is_multi_newline = false;
+    bool is_behind_list_symbol = false;
 
     while (iter != src.end()) {
         if (is_newline) {
@@ -139,6 +146,7 @@ void base_tokenize(std::string src, std::vector<Token> &ret) {
                 continue;
                 break;
             }
+            case '+':
             case '-': {
                 if (isblank(*forward)) {
                     ret.push_back({TokenType::UnorderedList});
@@ -146,6 +154,7 @@ void base_tokenize(std::string src, std::vector<Token> &ret) {
                         ++forward;
                     }
                     iter = forward;
+                    is_behind_list_symbol = true;
                     continue;
                 }
                 break;
@@ -192,6 +201,7 @@ void base_tokenize(std::string src, std::vector<Token> &ret) {
                     }
                     ret.push_back({TokenType::CodeBlock, code});
                     iter = forward;
+                    is_behind_list_symbol = true;
                     continue;
                 }
                 break;
@@ -239,6 +249,17 @@ void base_tokenize(std::string src, std::vector<Token> &ret) {
             }
             break;
         }
+        case '=': {
+            forward = iter + 1;
+            if (*forward == '=') {
+                text_flush(buf, ret);
+                ret.push_back({TokenType::Highlight});
+                iter = forward;
+            } else {
+                buf.push_back(*iter);
+            }
+            break;
+        }
         case '`': {
             std::string code;
             iter += 1;
@@ -252,12 +273,96 @@ void base_tokenize(std::string src, std::vector<Token> &ret) {
             ret.push_back({TokenType::CodeBlock, code});
             break;
         }
+        case '[': {
+            forward = iter + 1;
+            auto gorward = iter + 2;
+            auto horward = iter + 3;
+            if (is_behind_list_symbol && gorward != src.end() &&
+                *gorward == ']' && horward != src.end() && *horward == ' ') {
+                bool is_checked = *forward != ' ';
+                ret.push_back(
+                    {TokenType::CheckBoxList, is_checked ? "true" : "false"});
+                forward = horward;
+                while (isblank(*forward)) {
+                    ++forward;
+                }
+                iter = forward - 1;
+                is_behind_list_symbol = false;
+                break;
+            } else if (*forward == '[') {
+                std::string link;
+                bool successful = false;
+                while (*forward != '\n') {
+                    if (*forward == ']' && *(forward + 1) == ']') {
+                        successful = true;
+                        break;
+                    } else {
+                        ++forward;
+                        link.push_back(*forward);
+                    }
+                }
+                if (successful) {
+                    iter = forward + 2;
+                    ret.push_back({TokenType::Link, link});
+                    iter = forward;
+                }
+                break;
+            } else {
+                std::string link_text;
+                bool successful = false;
+                while (*forward != '\n') {
+                    if (*forward == ']') {
+                        forward += 1;
+                        successful = true;
+                        break;
+                    } else {
+                        link_text.push_back(*forward);
+                        ++forward;
+                    }
+                }
+                while (successful && isblank(*forward)) {
+                    ++forward;
+                }
+                if (successful && forward + 1 != src.end() &&
+                    *(forward + 1) == '(') {
+                    successful = false;
+                    std::string link;
+                    while (*forward != '\n') {
+                        if (*forward == ')') {
+                            successful = true;
+                            break;
+                        } else {
+                            ++forward;
+                            link.push_back(*forward);
+                        }
+                    }
+                    if (successful) {
+                        iter = forward + 2;
+                        ret.push_back({TokenType::Link, link});
+                    }
+                    std::vector<Token> link_text_tokens;
+                    base_tokenize(link_text, link_text_tokens);
+                    ret.push_back({TokenType::LinkTextBegin});
+                    for (auto c : link_text_tokens) {
+                        ret.push_back(c);
+                    }
+                    ret.push_back({TokenType::LinkTextEnd});
+                    iter = forward;
+                    break;
+                }
+            }
+            buf.push_back(*iter);
+            break;
+        }
         case '\n': {
             is_newline = true;
             text_flush(buf, ret);
             break;
         }
         default: {
+            if (!isblank(*iter)) {
+                is_behind_list_symbol = false;
+            }
             buf.push_back(*iter);
             break;
         }

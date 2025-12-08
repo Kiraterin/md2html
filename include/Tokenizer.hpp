@@ -15,7 +15,13 @@ enum class TokenType {
     QuotationBegin,
     QuotationEnd,
     CodeLang,
-    CodeBlock
+    CodeBlock,
+    Highlight,
+    CheckBoxList,
+    LinkTextBegin,
+    LinkTextEnd,
+    Link,
+    Image
 };
 
 class Token {
