@@ -132,8 +132,10 @@ void base_tokenize(std::string src, std::vector<Token> &ret) {
                     section.push_back('\n');
                     forward += 1;
                 }
+                section.pop_back();
                 base_tokenize(section, ret);
                 ret.push_back({TokenType::QuotationEnd});
+                iter = forward - 1;
                 continue;
                 break;
             }
