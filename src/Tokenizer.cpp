@@ -104,7 +104,7 @@ void base_tokenize(std::string src, std::vector<Token> &ret) {
             }
             case '*': {
                 auto gorward = forward;
-                size_t cnt = 0;
+                size_t cnt = 1;
                 while (*gorward == '*' || isblank(*gorward)) {
                     ++gorward;
                     ++cnt;
@@ -263,6 +263,7 @@ void base_tokenize(std::string src, std::vector<Token> &ret) {
         case '`': {
             std::string code;
             iter += 1;
+            text_flush(buf, ret);
             while (iter != src.end() && *iter != '`') {
                 code.push_back(*iter);
                 ++iter;
@@ -292,19 +293,19 @@ void base_tokenize(std::string src, std::vector<Token> &ret) {
             } else if (*forward == '[') {
                 std::string link;
                 bool successful = false;
+                forward += 1;
                 while (*forward != '\n') {
                     if (*forward == ']' && *(forward + 1) == ']') {
                         successful = true;
                         break;
                     } else {
-                        ++forward;
                         link.push_back(*forward);
+                        ++forward;
                     }
                 }
                 if (successful) {
-                    iter = forward + 2;
                     ret.push_back({TokenType::Link, link});
-                    iter = forward;
+                    iter = forward + 1;
                 }
                 break;
             } else {
@@ -323,31 +324,32 @@ void base_tokenize(std::string src, std::vector<Token> &ret) {
                 while (successful && isblank(*forward)) {
                     ++forward;
                 }
-                if (successful && forward + 1 != src.end() &&
-                    *(forward + 1) == '(') {
-                    successful = false;
+                if (successful && *forward == '(') {
                     std::string link;
+                    successful = false;
+                    forward += 1;
                     while (*forward != '\n') {
                         if (*forward == ')') {
                             successful = true;
                             break;
                         } else {
-                            ++forward;
                             link.push_back(*forward);
+                            ++forward;
                         }
                     }
                     if (successful) {
+                        text_flush(buf, ret);
                         iter = forward + 2;
+                        std::vector<Token> link_text_tokens;
+                        base_tokenize(link_text, link_text_tokens);
+                        ret.push_back({TokenType::LinkTextBegin});
+                        for (auto c : link_text_tokens) {
+                            ret.push_back(c);
+                        }
+                        ret.push_back({TokenType::LinkTextEnd});
                         ret.push_back({TokenType::Link, link});
+                        iter = forward;
                     }
-                    std::vector<Token> link_text_tokens;
-                    base_tokenize(link_text, link_text_tokens);
-                    ret.push_back({TokenType::LinkTextBegin});
-                    for (auto c : link_text_tokens) {
-                        ret.push_back(c);
-                    }
-                    ret.push_back({TokenType::LinkTextEnd});
-                    iter = forward;
                     break;
                 }
             }
